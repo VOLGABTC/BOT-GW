@@ -1,4 +1,4 @@
-# --- VERSION FINALE V3 - GESTION DES RÔLES INTÉGRÉE ---
+# --- VERSION FINALE V4 - PASSE-DROIT ADMIN INCLUS ---
 import os
 import json
 import random
@@ -59,7 +59,6 @@ def format_giveaway_message(chat_id: int) -> str:
         else: time_left_str = f"dans {minutes}m"
     end_time_str = end_time.strftime("%d %b %Y à %H:%M")
     
-    # On construit le message de base
     message = (
         f"🎉 *{prize}* 🎉\n\n"
         f"*Se termine :* {time_left_str} \\(le {end_time_str}\\)\n"
@@ -67,7 +66,6 @@ def format_giveaway_message(chat_id: int) -> str:
         f"*Participants :* {participants_count}\n"
         f"*Gagnants :* {winners_count}"
     )
-    # On ajoute la ligne pour le rôle requis s'il existe
     if giveaway.get("required_role"):
         message += f"\n*Réservé au rôle :* `{giveaway['required_role']}`"
         
@@ -178,40 +176,38 @@ async def giveaway_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if chat_id in active_giveaways:
         await update.message.reply_text("Un giveaway est déjà en cours dans ce chat ! Attendez la fin du précédent.")
         return
-
     args = context.args
     if len(args) < 3:
         await update.message.reply_text(
-            "Format incorrect.\nUsage : `/giveaway <gagnants> <durée> [rôle_optionnel] <prix>`\nExemple : `/giveaway 2 1h Super Lot`\nExemple avec rôle : `/giveaway 1 30m vip Lot Exclusif`"
+            "Format incorrect.\nUsage : `/giveaway <gagnants> <durée> [rôle] <prix>`\nExemple : `/giveaway 2 1h Super Lot`\nExemple avec rôle : `/giveaway 1 30m vip Lot Exclusif`"
         )
         return
-
     try:
         winners_count = int(args[0])
         duration = parse_duration(args[1])
-        
-        roles = load_roles()
-        potential_role = args[2].lower()
-        
-        # On regarde si le 3ème argument est un rôle qui existe VRAIMENT
-        if len(args) >= 4 and potential_role in roles:
-            required_role = potential_role
-            prize = ' '.join(args[3:])
-        else:
-            required_role = None
-            prize = ' '.join(args[2:])
-
+        required_role = None
+        prize_args = []
+        role_found = False
+        for i, arg in enumerate(args[2:]):
+            if arg.startswith('@') and not found_role:
+                potential_role = arg[1:].lower()
+                roles = load_roles()
+                if potential_role in roles:
+                    required_role = potential_role
+                    role_found = True
+                else:
+                    prize_args.append(arg)
+            else:
+                prize_args.append(arg)
+        prize = ' '.join(prize_args)
         if not prize or not duration or winners_count <= 0:
             raise ValueError("Arguments invalides")
-            
     except (ValueError, IndexError):
         await update.message.reply_text("Format invalide. Vérifiez les nombres et la durée (ex: 10m, 2h, 1d).")
         return
-
     end_time = datetime.datetime.now(datetime.timezone.utc) + duration
     host_user = update.effective_user
     escaped_prize = escape_markdown_v2(prize)
-
     giveaway_data = {
         "prize": escaped_prize,
         "required_role": required_role,
@@ -223,11 +219,9 @@ async def giveaway_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "chat_id": chat_id
     }
     active_giveaways[chat_id] = giveaway_data
-    
     message_text = format_giveaway_message(chat_id)
     keyboard = [[InlineKeyboardButton("🎉 Participer", callback_data='participate_giveaway')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
     try:
         sent_message = await update.message.reply_text(message_text, reply_markup=reply_markup, parse_mode=constants.ParseMode.MARKDOWN_V2)
         giveaway_data['message_id'] = sent_message.message_id
@@ -239,29 +233,26 @@ async def giveaway_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             del active_giveaways[chat_id]
 
 async def participate_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Gère le clic sur le bouton de participation et vérifie le rôle."""
+    """Gère le clic sur le bouton de participation et vérifie le rôle (avec passe-droit admin)."""
     query = update.callback_query
     user = query.from_user
     chat_id = query.message.chat_id
     if chat_id not in active_giveaways:
         await query.answer("Désolé, ce giveaway est déjà terminé.", show_alert=True)
         return
-
     giveaway = active_giveaways[chat_id]
-    
     required_role = giveaway.get("required_role")
-    if required_role:
+    # MODIFICATION : On ajoute la condition "user.id not in ADMIN_USER_IDS"
+    if required_role and user.id not in ADMIN_USER_IDS:
         roles = load_roles()
         if required_role not in roles or user.id not in roles[required_role]:
             await query.answer(f"Désolé, ce giveaway est réservé aux membres ayant le rôle '{required_role}'.", show_alert=True)
             return
-            
     if user.id in giveaway['participants']:
         await query.answer("Vous participez déjà !", show_alert=True)
     else:
         giveaway['participants'][user.id] = user.full_name
         await query.answer("Participation enregistrée. Bonne chance !", show_alert=True)
-        
         new_text = format_giveaway_message(chat_id)
         keyboard = [[InlineKeyboardButton("🎉 Participer", callback_data='participate_giveaway')]]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -276,34 +267,27 @@ async def draw_winners_callback(context: ContextTypes.DEFAULT_TYPE):
     if chat_id not in active_giveaways: return
     giveaway = active_giveaways[chat_id]
     participants = giveaway['participants']
-    participants_ids = list(participants.keys())
-    winners_count = min(giveaway['winners_count'], len(participants_ids))
     prize = giveaway['prize']
-    
     final_message = f"🎉 Le giveaway pour *{prize}* est terminé \\! 🎉\n\n"
-    
-    # On ajoute une vérification pour les rôles au moment du tirage
     required_role = giveaway.get("required_role")
     valid_participants = {}
     if required_role:
         roles = load_roles()
         if required_role in roles:
             for user_id, user_name in participants.items():
-                if user_id in roles[required_role]:
+                # Les admins peuvent participer, donc on les ajoute s'ils ont participé
+                if user_id in roles[required_role] or user_id in ADMIN_USER_IDS:
                     valid_participants[user_id] = user_name
     else:
         valid_participants = participants
-
     valid_participant_ids = list(valid_participants.keys())
-    winners_count = min(winners_count, len(valid_participant_ids))
-
+    winners_count = min(giveaway['winners_count'], len(valid_participant_ids))
     if not valid_participant_ids:
         final_message += "Malheureusement, aucun participant valide n'a été trouvé pour ce giveaway\\. 😕"
     else:
         winner_ids = random.sample(valid_participant_ids, k=winners_count)
         winner_mentions = [f"🏆 [{escape_markdown_v2(valid_participants[wid])}](tg://user?id={wid})" for wid in winner_ids]
         final_message += "Félicitations aux gagnants :\n" + "\n".join(winner_mentions)
-        
     await context.bot.send_message(chat_id, final_message, parse_mode=constants.ParseMode.MARKDOWN_V2)
     del active_giveaways[chat_id]
 
@@ -312,16 +296,20 @@ def main():
     if not TOKEN:
         print("Erreur: Le token n'a pas été trouvé. Assurez-vous de l'avoir configuré dans les variables d'environnement.")
         return
-
     application = ApplicationBuilder().token(TOKEN).build()
+    
+    # On ajoute la commande /start en premier
+    # Si vous n'avez pas de fonction start_command, vous pouvez la créer ou l'ajouter plus tard
+    # async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    #     await update.message.reply_text("Bienvenue !")
+    # application.add_handler(CommandHandler("start", start_command))
 
     application.add_handler(CommandHandler("giveaway", giveaway_command))
     application.add_handler(CommandHandler("annuler_giveaway", cancel_giveaway_command))
     application.add_handler(CommandHandler("assigner_role", assign_role_command))
     application.add_handler(CommandHandler("retirer_role", remove_role_command))
     application.add_handler(CallbackQueryHandler(participate_button, pattern='^participate_giveaway$'))
-
-    print("Le bot de giveaway (version V3 - Rôles) est démarré...")
+    print("Le bot de giveaway (version V4 - Passe-droit Admin) est démarré...")
     application.run_polling()
 
 if __name__ == '__main__':
