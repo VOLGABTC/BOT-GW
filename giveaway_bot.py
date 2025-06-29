@@ -66,6 +66,47 @@ def format_giveaway_message(chat_id: int) -> str:
 
 # --- Commandes du Bot ---
 
+async def cancel_giveaway_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Annule un giveaway en cours (Admin seulement)."""
+    if update.effective_user.id not in ADMIN_USER_IDS:
+        await update.message.reply_text("Désolé, seul un administrateur peut annuler un giveaway.")
+        return
+
+    chat_id = update.message.chat_id
+    if chat_id not in active_giveaways:
+        await update.message.reply_text("Il n'y a aucun giveaway en cours à annuler.")
+        return
+
+    giveaway = active_giveaways[chat_id]
+
+    # Étape cruciale : on annule le tirage programmé
+    # On retrouve le 'job' grâce au nom qu'on lui a donné lors de sa création
+    current_jobs = context.job_queue.get_jobs_by_name(f"gw_{chat_id}")
+    if current_jobs:
+        for job in current_jobs:
+            job.schedule_removal() # On demande sa suppression
+        print(f"Job pour le giveaway du chat {chat_id} annulé.")
+
+    # On modifie le message original pour indiquer l'annulation
+    prize = giveaway['prize'] # Le prix est déjà "échappé" pour Markdown
+    cancelled_text = f"❌ *GIVEAWAY ANNULÉ* ❌\n\nLe concours pour *{prize}* a été annulé par un administrateur."
+    
+    try:
+        await context.bot.edit_message_text(
+            chat_id=chat_id,
+            message_id=giveaway['message_id'],
+            text=cancelled_text,
+            parse_mode=constants.ParseMode.MARKDOWN_V2,
+            reply_markup=None # On retire les boutons
+        )
+    except Exception as e:
+        print(f"Erreur en éditant le message d'annulation: {e}")
+
+    # On supprime le giveaway de la mémoire
+    del active_giveaways[chat_id]
+
+    await update.message.reply_text("Le giveaway a bien été annulé.")
+
 async def giveaway_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Lance un nouveau giveaway. Format: /giveaway <gagnants> <durée> <prix>"""
     if update.effective_user.id not in ADMIN_USER_IDS:
@@ -171,12 +212,19 @@ async def draw_winners_callback(context: ContextTypes.DEFAULT_TYPE):
     del active_giveaways[chat_id]
 
 def main():
+    """Lance le bot."""
     if not TOKEN:
-        print("Erreur: Le token n'a pas été trouvé.")
+        print("Erreur: Le token n'a pas été trouvé. Assurez-vous de l'avoir configuré dans les variables d'environnement.")
         return
+
+    # On ne crée l'application QU'UNE SEULE FOIS
     application = ApplicationBuilder().token(TOKEN).build()
+
+    # On ajoute tous les gestionnaires de commandes ici
     application.add_handler(CommandHandler("giveaway", giveaway_command))
+    application.add_handler(CommandHandler("annuler_giveaway", cancel_giveaway_command)) # La nouvelle commande
     application.add_handler(CallbackQueryHandler(participate_button, pattern='^participate_giveaway$'))
+
     print("Le bot de giveaway (version V2 Robuste) est démarré...")
     application.run_polling()
 
