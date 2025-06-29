@@ -1,5 +1,6 @@
 # --- VERSION FINALE V2 - AVEC PROTECTION MARKDOWN ---
 import os
+import json
 import random
 import datetime
 import re
