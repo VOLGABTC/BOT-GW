@@ -1,4 +1,4 @@
-# --- VERSION FINALE V4 - PASSE-DROIT ADMIN INCLUS ---
+# --- VERSION FINALE V5 - COMMANDE /HELP AJOUTÉE ---
 import os
 import json
 import random
@@ -90,6 +90,33 @@ def save_roles(roles_data):
 
 # --- Commandes du Bot ---
 
+# NOUVELLE FONCTION POUR LA COMMANDE /help
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Envoie un message d'aide complet listant toutes les commandes."""
+    
+    help_text = (
+        "💡 *Voici la liste des commandes disponibles* 💡\n\n"
+        "\\-\\-\\-\n\n"
+        "*Commandes pour les Administrateurs*\n\n"
+        "`/giveaway <gagnants> <durée> [@rôle] <prix>`\n"
+        "_Lance un nouveau giveaway\\. Le rôle est optionnel\\._\n"
+        "*Exemple:* `/giveaway 2 1h Super Lot`\n"
+        "*Exemple avec rôle:* `/giveaway 1 30m @vip Lot VIP`\n\n"
+        "`/annuler_giveaway`\n"
+        "_Annule le concours en cours dans le chat\\._\n\n"
+        "`/assigner_role <rôle>`\n"
+        "_(En réponse à un message) Assigne un rôle à un utilisateur\\._\n\n"
+        "`/retirer_role <rôle>`\n"
+        "_(En réponse à un message) Retire un rôle à un utilisateur\\._\n\n"
+        "`/help`\n"
+        "_Affiche ce message d'aide\\._"
+    )
+    
+    await update.message.reply_text(
+        text=help_text,
+        parse_mode=constants.ParseMode.MARKDOWN_V2
+    )
+
 async def assign_role_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Assigne un rôle à un utilisateur."""
     if update.effective_user.id not in ADMIN_USER_IDS:
@@ -179,7 +206,7 @@ async def giveaway_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     args = context.args
     if len(args) < 3:
         await update.message.reply_text(
-            "Format incorrect.\nUsage : `/giveaway <gagnants> <durée> [rôle] <prix>`\nExemple : `/giveaway 2 1h Super Lot`\nExemple avec rôle : `/giveaway 1 30m vip Lot Exclusif`"
+            "Format incorrect.\nUsage : `/giveaway <gagnants> <durée> [@rôle] <prix>`\nExemple : `/giveaway 2 1h Super Lot`\nExemple avec rôle : `/giveaway 1 30m @vip Lot Exclusif`"
         )
         return
     try:
@@ -242,7 +269,6 @@ async def participate_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
     giveaway = active_giveaways[chat_id]
     required_role = giveaway.get("required_role")
-    # MODIFICATION : On ajoute la condition "user.id not in ADMIN_USER_IDS"
     if required_role and user.id not in ADMIN_USER_IDS:
         roles = load_roles()
         if required_role not in roles or user.id not in roles[required_role]:
@@ -275,7 +301,6 @@ async def draw_winners_callback(context: ContextTypes.DEFAULT_TYPE):
         roles = load_roles()
         if required_role in roles:
             for user_id, user_name in participants.items():
-                # Les admins peuvent participer, donc on les ajoute s'ils ont participé
                 if user_id in roles[required_role] or user_id in ADMIN_USER_IDS:
                     valid_participants[user_id] = user_name
     else:
@@ -296,20 +321,19 @@ def main():
     if not TOKEN:
         print("Erreur: Le token n'a pas été trouvé. Assurez-vous de l'avoir configuré dans les variables d'environnement.")
         return
+
     application = ApplicationBuilder().token(TOKEN).build()
-    
-    # On ajoute la commande /start en premier
-    # Si vous n'avez pas de fonction start_command, vous pouvez la créer ou l'ajouter plus tard
-    # async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    #     await update.message.reply_text("Bienvenue !")
-    # application.add_handler(CommandHandler("start", start_command))
+
+    # On ajoute la commande /start ou /help
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("start", help_command)) # On fait pointer /start vers la même fonction
 
     application.add_handler(CommandHandler("giveaway", giveaway_command))
     application.add_handler(CommandHandler("annuler_giveaway", cancel_giveaway_command))
     application.add_handler(CommandHandler("assigner_role", assign_role_command))
     application.add_handler(CommandHandler("retirer_role", remove_role_command))
     application.add_handler(CallbackQueryHandler(participate_button, pattern='^participate_giveaway$'))
-    print("Le bot de giveaway (version V4 - Passe-droit Admin) est démarré...")
+    print("Le bot de giveaway (version V5 - Aide) est démarré...")
     application.run_polling()
 
 if __name__ == '__main__':
