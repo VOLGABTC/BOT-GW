@@ -66,6 +66,92 @@ def format_giveaway_message(chat_id: int) -> str:
 
 # --- Commandes du Bot ---
 
+# --- Fichier de stockage pour les rôles ---
+ROLES_FILE = "roles.json"
+
+# --- Fonctions de Gestion des Rôles ---
+
+def load_roles():
+    """Charge les données des rôles depuis le fichier JSON."""
+    try:
+        with open(ROLES_FILE, 'r') as f:
+            # On s'assure que le fichier n'est pas vide avant de le charger
+            content = f.read()
+            if not content:
+                return {}
+            return json.loads(content)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {} # Format: {"nom_du_role": [user_id1, user_id2]}
+
+def save_roles(roles_data):
+    """Sauvegarde les données des rôles dans le fichier JSON."""
+    with open(ROLES_FILE, 'w') as f:
+        json.dump(roles_data, f, indent=4)
+
+async def assign_role_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Assigne un rôle à un utilisateur. Usage: /assigner_role <role> (en réponse à un message)"""
+    if update.effective_user.id not in ADMIN_USER_IDS:
+        await update.message.reply_text("Désolé, seul un administrateur peut assigner un rôle.")
+        return
+
+    # On vérifie que la commande est bien une réponse à un message
+    if not update.message.reply_to_message:
+        await update.message.reply_text("Usage : Répondez au message d'un utilisateur avec `/assigner_role <nom_du_role>`")
+        return
+
+    try:
+        role_name = context.args[0]
+        target_user_id = update.message.reply_to_message.from_user.id
+        target_user_name = update.message.reply_to_message.from_user.full_name
+    except IndexError:
+        await update.message.reply_text("Format incorrect. N'oubliez pas le nom du rôle : `/assigner_role <nom_du_role>`")
+        return
+
+    roles = load_roles()
+    
+    # On met le nom du rôle en minuscule pour éviter les doublons (VIP et vip seraient le même rôle)
+    role_name = role_name.lower()
+
+    if role_name not in roles:
+        roles[role_name] = []
+        
+    if target_user_id not in roles[role_name]:
+        roles[role_name].append(target_user_id)
+        save_roles(roles)
+        await update.message.reply_text(f"Le rôle '{role_name}' a bien été assigné à {target_user_name}.")
+    else:
+        await update.message.reply_text(f"{target_user_name} a déjà le rôle '{role_name}'.")
+
+async def remove_role_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Retire un rôle à un utilisateur. Usage: /retirer_role <role> (en réponse à un message)"""
+    if update.effective_user.id not in ADMIN_USER_IDS:
+        await update.message.reply_text("Désolé, seul un administrateur peut retirer un rôle.")
+        return
+        
+    if not update.message.reply_to_message:
+        await update.message.reply_text("Usage : Répondez au message d'un utilisateur avec `/retirer_role <nom_du_role>`")
+        return
+
+    try:
+        role_name = context.args[0].lower()
+        target_user_id = update.message.reply_to_message.from_user.id
+        target_user_name = update.message.reply_to_message.from_user.full_name
+    except IndexError:
+        await update.message.reply_text("Format incorrect. Usage: `/retirer_role <nom_du_role>`")
+        return
+
+    roles = load_roles()
+
+    if role_name in roles and target_user_id in roles[role_name]:
+        roles[role_name].remove(target_user_id)
+        # Si le rôle est maintenant vide, on peut le supprimer
+        if not roles[role_name]:
+            del roles[role_name]
+        save_roles(roles)
+        await update.message.reply_text(f"Le rôle '{role_name}' a été retiré à {target_user_name}.")
+    else:
+        await update.message.reply_text(f"{target_user_name} n'a pas (ou plus) le rôle '{role_name}'.")
+
 async def cancel_giveaway_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Annule un giveaway en cours (Admin seulement)."""
     if update.effective_user.id not in ADMIN_USER_IDS:
@@ -220,10 +306,14 @@ def main():
     # On ne crée l'application QU'UNE SEULE FOIS
     application = ApplicationBuilder().token(TOKEN).build()
 
+    
+
     # On ajoute tous les gestionnaires de commandes ici
     application.add_handler(CommandHandler("giveaway", giveaway_command))
     application.add_handler(CommandHandler("annuler_giveaway", cancel_giveaway_command)) # La nouvelle commande
     application.add_handler(CallbackQueryHandler(participate_button, pattern='^participate_giveaway$'))
+    application.add_handler(CommandHandler("assigner_role", assign_role_command))
+    application.add_handler(CommandHandler("retirer_role", remove_role_command))
 
     print("Le bot de giveaway (version V2 Robuste) est démarré...")
     application.run_polling()
