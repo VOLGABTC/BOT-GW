@@ -58,7 +58,7 @@ def format_giveaway_message(chat_id: int) -> str:
     end_time_str = end_time.strftime("%d %b %Y à %H:%M")
     return (
         f"🎉 *{prize}* 🎉\n\n"
-        f"*Se termine :* {time_left_str} (le {end_time_str})\n"
+        f"*Se termine :* {time_left_str} \(le {end_time_str}\)\n"
         f"*Organisé par :* {host}\n"
         f"*Participants :* {participants_count}\n"
         f"*Gagnants :* {winners_count}"
