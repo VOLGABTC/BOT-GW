@@ -6,7 +6,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, constan
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 
 # --- Configuration ---
-TOKEN = '7678099516:AAFLPj57UO8NglDFAfoBKg3L3UhdsNX3D70'
+TOKEN = '7678099516:AAGR4fuHHQfg_VBPvrmSurStX-nY9IbfPIw'
 ADMIN_USER_IDS = [6938893387, 6619876284]
 
 # Nous allons stocker l'état du giveaway en mémoire vive pour cet exemple
