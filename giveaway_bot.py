@@ -122,7 +122,7 @@ async def remove_role_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     if update.effective_user.id not in ADMIN_USER_IDS:
         await update.message.reply_text("Désolé, seul un administrateur peut retirer un rôle.")
         return
-    if not update.message.reply_to_message:
+    if not update.message or not update.message.reply_to_message:
         await update.message.reply_text("Usage : Répondez au message d'un utilisateur avec `/retirer_role <nom_du_role>`")
         return
     try:
