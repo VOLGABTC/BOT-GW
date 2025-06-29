@@ -1,4 +1,4 @@
-# --- VERSION FINALE V5 - COMMANDE /HELP AJOUTÉE ---
+# --- VERSION FINALE V5.1 - CORRECTION MARKDOWN HELP ---
 import os
 import json
 import random
@@ -90,10 +90,10 @@ def save_roles(roles_data):
 
 # --- Commandes du Bot ---
 
-# NOUVELLE FONCTION POUR LA COMMANDE /help
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Envoie un message d'aide complet listant toutes les commandes."""
     
+    # CORRECTION : On échappe les parenthèses qui causaient l'erreur
     help_text = (
         "💡 *Voici la liste des commandes disponibles* 💡\n\n"
         "\\-\\-\\-\n\n"
@@ -105,9 +105,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "`/annuler_giveaway`\n"
         "_Annule le concours en cours dans le chat\\._\n\n"
         "`/assigner_role <rôle>`\n"
-        "_(En réponse à un message) Assigne un rôle à un utilisateur\\._\n\n"
+        "_\\(En réponse à un message\\) Assigne un rôle à un utilisateur\\._\n\n"
         "`/retirer_role <rôle>`\n"
-        "_(En réponse à un message) Retire un rôle à un utilisateur\\._\n\n"
+        "_\\(En réponse à un message\\) Retire un rôle à un utilisateur\\._\n\n"
         "`/help`\n"
         "_Affiche ce message d'aide\\._"
     )
@@ -324,16 +324,15 @@ def main():
 
     application = ApplicationBuilder().token(TOKEN).build()
 
-    # On ajoute la commande /start ou /help
     application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("start", help_command)) # On fait pointer /start vers la même fonction
-
+    application.add_handler(CommandHandler("start", help_command))
     application.add_handler(CommandHandler("giveaway", giveaway_command))
     application.add_handler(CommandHandler("annuler_giveaway", cancel_giveaway_command))
     application.add_handler(CommandHandler("assigner_role", assign_role_command))
     application.add_handler(CommandHandler("retirer_role", remove_role_command))
     application.add_handler(CallbackQueryHandler(participate_button, pattern='^participate_giveaway$'))
-    print("Le bot de giveaway (version V5 - Aide) est démarré...")
+    
+    print("Le bot de giveaway (version V5.1 - Corrigé) est démarré...")
     application.run_polling()
 
 if __name__ == '__main__':
