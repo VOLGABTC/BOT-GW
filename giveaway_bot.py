@@ -252,7 +252,7 @@ async def giveaway_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         sent_message = await context.bot.send_message(chat_id, message_text, reply_markup=reply_markup, parse_mode=constants.ParseMode.MARKDOWN_V2, message_thread_id=message_thread_id)
         giveaway_data['message_id'] = sent_message.message_id
-        image_url = "https://i.imgur.com/6Nq3A6j.jpg"
+        image_url = "https://imgur.com/a/fGbNYQ2"
         caption_text = f"Giveaway pour '{prize}' lancé ! Tirage dans {args[1]}."
         await context.bot.send_photo(chat_id=chat_id, photo=image_url, caption=caption_text, message_thread_id=message_thread_id)
         job_data = {"giveaway_key": giveaway_key}
