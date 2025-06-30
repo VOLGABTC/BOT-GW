@@ -291,7 +291,20 @@ async def giveaway_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.job_queue.run_once(final_minute_trigger_job, when=transition_time, data=job_data, name=f"gw_final_minute_{giveaway_key}")
         else:
             context.job_queue.run_repeating(update_countdown_job, interval=3, data=job_data, name=f"gw_update_fast_{giveaway_key}")
-        await update.message.reply_text(f"Giveaway pour '{prize}' lancé ! Tirage dans {args[1]}.", reply_to_message_id=sent_message.message_id)
+        # On définit l'URL de l'image de prévention que vous avez uploadée
+image_url = "https://imgur.com/a/bujV1ju" 
+
+# On définit la légende qui accompagnera l'image
+# On réutilise le nom du lot (prize) et la durée (args[1])
+caption_text = f"Giveaway pour '{prize}' lancé ! Tirage dans {args[1]}."
+
+# On envoie la photo avec sa légende dans le bon sujet (topic)
+await context.bot.send_photo(
+    chat_id=chat_id,
+    photo=image_url,
+    caption=caption_text,
+    message_thread_id=message_thread_id
+)
     except Exception as e:
         print(f"ERREUR CRITIQUE LORS DE L'ENVOI DU MESSAGE DE GIVEAWAY : {e}")
         await update.message.reply_text("Une erreur est survenue lors de la création de l'annonce.")
