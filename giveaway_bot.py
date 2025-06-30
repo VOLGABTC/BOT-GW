@@ -225,7 +225,7 @@ async def cancel_giveaway_command(update: Update, context: ContextTypes.DEFAULT_
     await update.message.reply_text("Le giveaway a bien été annulé.")
 
 async def giveaway_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Lance un nouveau giveaway, avec la logique de parsing de rôle DÉFINITIVE."""
+    """Lance un nouveau giveaway, avec la logique de parsing de rôle DÉFINITIVE ET ROBUSTE."""
     if update.effective_user.id not in ADMIN_USER_IDS:
         return await update.message.reply_text("Désolé, seul un administrateur peut lancer un giveaway.")
     
@@ -236,7 +236,7 @@ async def giveaway_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await update.message.reply_text("Un giveaway est déjà en cours dans ce sujet !")
         
     args = context.args
-    if len(args) < 3:
+    if len(args) < 2: # On a besoin au minimum de <gagnants> <durée> <prix>
         return await update.message.reply_text(
             "Format incorrect.\nUsage : `/giveaway <gagnants> <durée> [@rôle] <prix>`\nExemple : `/giveaway 2 1h Super Lot`"
         )
@@ -249,24 +249,31 @@ async def giveaway_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         required_role = None
         prize_start_index = 2  # Par défaut, le prix commence au 3ème argument
 
-        # On vérifie si le 3ème argument est un rôle valide
-        if len(args) >= 4 and args[2].startswith('@'):
+        # On vérifie si le 3ème argument ressemble à un rôle
+        if len(args) > 2 and args[2].startswith('@'):
             potential_role = args[2][1:].lower()
             roles = load_roles()
             if potential_role in roles:
                 required_role = potential_role
-                prize_start_index = 3 # Si c'est un rôle, le prix commence après
+            # Si le rôle n'existe pas, on l'ignore mais on ne l'inclut pas dans le prix
+            prize_start_index = 3 # Dans tous les cas, si ça commence par @, le prix commence après
         
+        # On vérifie qu'il reste des mots pour le prix
+        if len(args) <= prize_start_index:
+            raise ValueError("Le nom du prix est manquant après le rôle.")
+
         prize = ' '.join(args[prize_start_index:])
         # --- FIN DE LA LOGIQUE CORRIGÉE ---
 
         if not prize or not duration or winners_count <= 0:
             raise ValueError("Arguments invalides")
             
-    except (ValueError, IndexError):
-        return await update.message.reply_text("Format invalide. Vérifiez les nombres et la durée (ex: 10m, 2h, 1d).")
+    except (ValueError, IndexError) as e:
+        # On peut afficher une erreur plus précise
+        error_message = str(e) if str(e) else "Format invalide. Vérifiez les nombres et la durée (ex: 10m, 2h, 1d)."
+        return await update.message.reply_text(error_message)
 
-    # Le reste de la fonction est inchangé
+    # Le reste de la fonction est inchangé...
     end_time = datetime.datetime.now(datetime.timezone.utc) + duration
     host_user = update.effective_user
     escaped_prize = escape_markdown_v2(prize)
