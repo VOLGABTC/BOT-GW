@@ -118,7 +118,7 @@ async def draw_winners_callback(context: ContextTypes.DEFAULT_TYPE):
         await context.bot.edit_message_text(
             chat_id=chat_id,
             message_id=giveaway['message_id'],
-            text=f"🎉 *{giveaway['prize']}* 🎉\n\n⌛️ *Tirage en cours...*",
+            text=f"🎉 *{giveaway['prize']}* 🎉\n\n⌛️ *Tirage en cours\\.\\.\\.*",
             parse_mode=constants.ParseMode.MARKDOWN_V2,
             reply_markup=None # On retire le bouton "Participer"
         )
