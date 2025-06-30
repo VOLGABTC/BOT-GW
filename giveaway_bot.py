@@ -1,4 +1,4 @@
-# --- VERSION FINALE V5.1 - CORRECTION MARKDOWN HELP ---
+# --- VERSION FINALE V5.2 - CORRECTION NAMEERROR ---
 import os
 import json
 import random
@@ -92,8 +92,6 @@ def save_roles(roles_data):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Envoie un message d'aide complet listant toutes les commandes."""
-    
-    # CORRECTION : On échappe les parenthèses qui causaient l'erreur
     help_text = (
         "💡 *Voici la liste des commandes disponibles* 💡\n\n"
         "\\-\\-\\-\n\n"
@@ -111,11 +109,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "`/help`\n"
         "_Affiche ce message d'aide\\._"
     )
-    
-    await update.message.reply_text(
-        text=help_text,
-        parse_mode=constants.ParseMode.MARKDOWN_V2
-    )
+    await update.message.reply_text(text=help_text, parse_mode=constants.ParseMode.MARKDOWN_V2)
 
 async def assign_role_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Assigne un rôle à un utilisateur."""
@@ -214,9 +208,9 @@ async def giveaway_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         duration = parse_duration(args[1])
         required_role = None
         prize_args = []
-        role_found = False
+        role_found = False # LA CORRECTION EST ICI : On initialise la variable
         for i, arg in enumerate(args[2:]):
-            if arg.startswith('@') and not found_role:
+            if arg.startswith('@') and not role_found:
                 potential_role = arg[1:].lower()
                 roles = load_roles()
                 if potential_role in roles:
@@ -321,9 +315,7 @@ def main():
     if not TOKEN:
         print("Erreur: Le token n'a pas été trouvé. Assurez-vous de l'avoir configuré dans les variables d'environnement.")
         return
-
     application = ApplicationBuilder().token(TOKEN).build()
-
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("start", help_command))
     application.add_handler(CommandHandler("giveaway", giveaway_command))
@@ -331,8 +323,7 @@ def main():
     application.add_handler(CommandHandler("assigner_role", assign_role_command))
     application.add_handler(CommandHandler("retirer_role", remove_role_command))
     application.add_handler(CallbackQueryHandler(participate_button, pattern='^participate_giveaway$'))
-    
-    print("Le bot de giveaway (version V5.1 - Corrigé) est démarré...")
+    print("Le bot de giveaway (version V5.2 - Corrigé) est démarré...")
     application.run_polling()
 
 if __name__ == '__main__':
