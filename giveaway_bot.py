@@ -183,17 +183,55 @@ async def reroll_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(reroll_message, parse_mode=constants.ParseMode.MARKDOWN_V2)
 
 async def assign_role_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.id not in ADMIN_USER_IDS: return await update.message.reply_text("Désolé, seul un administrateur peut assigner un rôle.")
-    if not update.message.reply_to_message: return await update.message.reply_text("Usage : Répondez au message d'un utilisateur avec `/assigner_role <nom_du_role>`")
-    try: role_name, target_user_id, target_user_name = context.args[0].lower(), update.message.reply_to_message.from_user.id, update.message.reply_to_message.from_user.full_name
-    except IndexError: return await update.message.reply_text("Format incorrect. N'oubliez pas le nom du rôle.")
+    """Assigne un rôle à un utilisateur via une réponse ou un ID direct."""
+    if update.effective_user.id not in ADMIN_USER_IDS:
+        return await update.message.reply_text("Désolé, seul un administrateur peut assigner un rôle.")
+
+    try:
+        role_name = context.args[0].lower()
+    except IndexError:
+        return await update.message.reply_text("Format incorrect. Vous devez spécifier un nom de rôle.")
+
+    target_user_id = None
+    target_user_name = None
+
+    # --- NOUVELLE LOGIQUE DE DÉTECTION ---
+
+    # Méthode 1 : On vérifie si c'est une réponse
+    if update.message.reply_to_message:
+        target_user_id = update.message.reply_to_message.from_user.id
+        target_user_name = update.message.reply_to_message.from_user.full_name
+    
+    # Méthode 2 : Sinon, on vérifie si un ID a été fourni
+    elif len(context.args) >= 2:
+        try:
+            target_user_id = int(context.args[1])
+            # On n'a pas le nom de l'utilisateur facilement, on utilise son ID pour la confirmation
+            target_user_name = f"l'utilisateur avec l'ID {target_user_id}"
+        except ValueError:
+            return await update.message.reply_text("L'ID fourni n'est pas un numéro valide.")
+    
+    # Si aucune méthode n'a permis de trouver une cible
+    else:
+        return await update.message.reply_text(
+            "Usage incorrect.\n"
+            "Méthode 1 : Répondez au message d'un utilisateur avec `/assigner_role <rôle>`\n"
+            "Méthode 2 : Tapez `/assigner_role <rôle> <id_utilisateur>`"
+        )
+
+    # --- FIN DE LA NOUVELLE LOGIQUE ---
+
+    # Le reste de la fonction pour sauvegarder le rôle est le même
     roles = load_roles()
-    if role_name not in roles: roles[role_name] = []
+    if role_name not in roles:
+        roles[role_name] = []
+        
     if target_user_id not in roles[role_name]:
         roles[role_name].append(target_user_id)
         save_roles(roles)
         await update.message.reply_text(f"Le rôle '{role_name}' a bien été assigné à {target_user_name}.")
-    else: await update.message.reply_text(f"{target_user_name} a déjà le rôle '{role_name}'.")
+    else:
+        await update.message.reply_text(f"{target_user_name} a déjà le rôle '{role_name}'.")
 
 async def remove_role_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_USER_IDS: return await update.message.reply_text("Désolé, seul un administrateur peut retirer un rôle.")
