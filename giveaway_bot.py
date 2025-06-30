@@ -1,11 +1,11 @@
-# --- VERSION FINALE V6 - COMPTE A REBOURS DYNAMIQUE ---
+# --- VERSION FINALE V7 - COMPTE A REBOURS SECONDES ---
 import os
 import json
 import random
 import datetime
 import re
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, constants
-from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes, JobQueue
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 import telegram.error
 
 # --- Configuration ---
@@ -18,59 +18,39 @@ active_giveaways = {}
 # --- Fichier de stockage pour les rôles ---
 ROLES_FILE = "roles.json"
 
-# --- Fonctions Utilitaires ---
+# --- Fonctions Utilitaires (inchangées) ---
 
 def escape_markdown_v2(text: str) -> str:
-    """Échappe les caractères spéciaux pour le format MarkdownV2 de Telegram."""
     escape_chars = r'_*[]()~`>#+-=|{}.!'
     return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', text)
 
 def parse_duration(duration_str: str) -> datetime.timedelta | None:
-    """Analyse une chaîne de durée (ex: '10h', '30m', '2d') et retourne un timedelta."""
     match = re.match(r"(\d+)([hmd])", duration_str.lower())
-    if not match:
-        return None
+    if not match: return None
     value, unit = int(match.group(1)), match.group(2)
-    if unit == 'm':
-        return datetime.timedelta(minutes=value)
-    elif unit == 'h':
-        return datetime.timedelta(hours=value)
-    elif unit == 'd':
-        return datetime.timedelta(days=value)
+    if unit == 'm': return datetime.timedelta(minutes=value)
+    elif unit == 'h': return datetime.timedelta(hours=value)
+    elif unit == 'd': return datetime.timedelta(days=value)
     return None
 
 def format_giveaway_message(chat_id: int) -> str:
-    """Met en forme le message du giveaway pour l'affichage (avec les secondes)."""
     giveaway = active_giveaways.get(chat_id)
     if not giveaway: return "Aucun giveaway en cours."
-    prize = giveaway['prize']
-    end_time = giveaway['end_time']
-    host = giveaway['host_mention']
-    participants_count = len(giveaway['participants'])
-    winners_count = giveaway['winners_count']
+    prize, end_time, host = giveaway['prize'], giveaway['end_time'], giveaway['host_mention']
+    participants_count, winners_count = len(giveaway['participants']), giveaway['winners_count']
     now = datetime.datetime.now(end_time.tzinfo)
     time_left = end_time - now
-
     if time_left.total_seconds() <= 0:
         time_left_str = "terminé !"
     else:
-        # --- NOUVELLE LOGIQUE D'AFFICHAGE DU TEMPS ---
-        days = time_left.days
-        hours, remainder = divmod(time_left.seconds, 3600)
-        minutes, seconds = divmod(remainder, 60) # On récupère les secondes
-        
-        if days > 0:
-            time_left_str = f"dans {days}j {hours}h"
-        elif hours > 0:
-            time_left_str = f"dans {hours}h {minutes}m"
-        elif minutes > 0:
-            time_left_str = f"dans {minutes}m {seconds}s"
-        else:
-            time_left_str = f"dans {seconds}s"
-        # --- FIN DE LA NOUVELLE LOGIQUE ---
-            
+        days, remainder = divmod(int(time_left.total_seconds()), 86400)
+        hours, remainder = divmod(remainder, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        if days > 0: time_left_str = f"dans {days}j {hours}h"
+        elif hours > 0: time_left_str = f"dans {hours}h {minutes}m"
+        elif minutes > 0: time_left_str = f"dans {minutes}m {seconds}s"
+        else: time_left_str = f"dans {seconds}s"
     end_time_str = end_time.strftime("%d %b %Y à %H:%M")
-    
     message = (
         f"🎉 *{prize}* 🎉\n\n"
         f"*Se termine :* {time_left_str} \\(le {end_time_str}\\)\n"
@@ -80,13 +60,11 @@ def format_giveaway_message(chat_id: int) -> str:
     )
     if giveaway.get("required_role"):
         message += f"\n*Réservé au rôle :* `{giveaway['required_role']}`"
-        
     return message
 
-# --- Fonctions de Gestion des Rôles ---
+# --- Fonctions de Gestion des Rôles (inchangées) ---
 
 def load_roles():
-    """Charge les données des rôles depuis le fichier JSON."""
     try:
         with open(ROLES_FILE, 'r') as f:
             content = f.read()
@@ -96,7 +74,6 @@ def load_roles():
         return {}
 
 def save_roles(roles_data):
-    """Sauvegarde les données des rôles dans le fichier JSON."""
     with open(ROLES_FILE, 'w') as f:
         json.dump(roles_data, f, indent=4)
 
@@ -118,8 +95,7 @@ async def update_countdown_job(context: ContextTypes.DEFAULT_TYPE):
             reply_markup=reply_markup, parse_mode=constants.ParseMode.MARKDOWN_V2
         )
     except telegram.error.BadRequest as e:
-        if "Message is not modified" in str(e):
-            pass
+        if "Message is not modified" in str(e): pass
         else:
             print(f"Erreur (BadRequest) lors de la mise à jour du compte à rebours : {e}")
             context.job.schedule_removal()
@@ -127,14 +103,28 @@ async def update_countdown_job(context: ContextTypes.DEFAULT_TYPE):
         print(f"Erreur inattendue dans le job de compte à rebours: {e}")
         context.job.schedule_removal()
 
-async def draw_winners_callback(context: ContextTypes.DEFAULT_TYPE):
-    """Fonction appelée par le job_queue pour effectuer le tirage."""
+async def final_minute_trigger_job(context: ContextTypes.DEFAULT_TYPE):
+    """Job qui se déclenche 60s avant la fin pour passer au décompte rapide."""
     chat_id = context.job.data['chat_id']
-    update_jobs = context.job_queue.get_jobs_by_name(f"gw_update_{chat_id}")
-    for job in update_jobs:
+    print(f"Giveaway {chat_id}: Passage au décompte final (dernière minute).")
+    # On arrête le job de mise à jour lente (toutes les 60s)
+    slow_update_jobs = context.job_queue.get_jobs_by_name(f"gw_update_slow_{chat_id}")
+    for job in slow_update_jobs:
         job.schedule_removal()
+    # On démarre le job de mise à jour rapide (toutes les 3s)
+    context.job_queue.run_repeating(update_countdown_job, interval=3, data={"chat_id": chat_id}, name=f"gw_update_fast_{chat_id}")
+
+async def draw_winners_callback(context: ContextTypes.DEFAULT_TYPE):
+    """Fonction appelée pour le tirage au sort final."""
+    chat_id = context.job.data['chat_id']
+    # On arrête tous les jobs de mise à jour restants (le rapide ou le lent)
+    for job_name in [f"gw_update_slow_{chat_id}", f"gw_update_fast_{chat_id}"]:
+        for job in context.job_queue.get_jobs_by_name(job_name):
+            job.schedule_removal()
+    
     if chat_id not in active_giveaways: return
     giveaway = active_giveaways[chat_id]
+    # ... (le reste de la logique de tirage est inchangée) ...
     participants = giveaway['participants']
     prize = giveaway['prize']
     final_message = f"🎉 Le giveaway pour *{prize}* est terminé \\! 🎉\n\n"
@@ -146,8 +136,7 @@ async def draw_winners_callback(context: ContextTypes.DEFAULT_TYPE):
             for user_id, user_name in participants.items():
                 if user_id in roles[required_role] or user_id in ADMIN_USER_IDS:
                     valid_participants[user_id] = user_name
-    else:
-        valid_participants = participants
+    else: valid_participants = participants
     valid_participant_ids = list(valid_participants.keys())
     winners_count = min(giveaway['winners_count'], len(valid_participant_ids))
     if not valid_participant_ids:
@@ -160,10 +149,10 @@ async def draw_winners_callback(context: ContextTypes.DEFAULT_TYPE):
     if chat_id in active_giveaways:
         del active_giveaways[chat_id]
 
-# --- Commandes du Bot ---
+# --- Commandes du Bot (la plupart sont inchangées) ---
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Envoie un message d'aide complet listant toutes les commandes."""
+    # ... (inchangée) ...
     help_text = (
         "💡 *Voici la liste des commandes disponibles* 💡\n\n"
         "\\-\\-\\-\n\n"
@@ -184,7 +173,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text=help_text, parse_mode=constants.ParseMode.MARKDOWN_V2)
 
 async def assign_role_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Assigne un rôle à un utilisateur."""
+    # ... (inchangée) ...
     if update.effective_user.id not in ADMIN_USER_IDS:
         await update.message.reply_text("Désolé, seul un administrateur peut assigner un rôle.")
         return
@@ -209,7 +198,7 @@ async def assign_role_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text(f"{target_user_name} a déjà le rôle '{role_name}'.")
 
 async def remove_role_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Retire un rôle à un utilisateur."""
+    # ... (inchangée) ...
     if update.effective_user.id not in ADMIN_USER_IDS:
         await update.message.reply_text("Désolé, seul un administrateur peut retirer un rôle.")
         return
@@ -226,8 +215,7 @@ async def remove_role_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     roles = load_roles()
     if role_name in roles and target_user_id in roles[role_name]:
         roles[role_name].remove(target_user_id)
-        if not roles[role_name]:
-            del roles[role_name]
+        if not roles[role_name]: del roles[role_name]
         save_roles(roles)
         await update.message.reply_text(f"Le rôle '{role_name}' a été retiré à {target_user_name}.")
     else:
@@ -242,14 +230,10 @@ async def cancel_giveaway_command(update: Update, context: ContextTypes.DEFAULT_
     if chat_id not in active_giveaways:
         await update.message.reply_text("Il n'y a aucun giveaway en cours à annuler.")
         return
-    
-    draw_jobs = context.job_queue.get_jobs_by_name(f"gw_draw_{chat_id}")
-    for job in draw_jobs:
-        job.schedule_removal()
-    
-    update_jobs = context.job_queue.get_jobs_by_name(f"gw_update_{chat_id}")
-    for job in update_jobs:
-        job.schedule_removal()
+    # On arrête tous les jobs possibles
+    for job_name in [f"gw_draw_{chat_id}", f"gw_update_slow_{chat_id}", f"gw_update_fast_{chat_id}", f"gw_final_minute_{chat_id}"]:
+        for job in context.job_queue.get_jobs_by_name(job_name):
+            job.schedule_removal()
     
     giveaway = active_giveaways[chat_id]
     prize = giveaway['prize']
@@ -266,56 +250,44 @@ async def cancel_giveaway_command(update: Update, context: ContextTypes.DEFAULT_
     await update.message.reply_text("Le giveaway a bien été annulé.")
 
 async def giveaway_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Lance un nouveau giveaway, avec un rôle optionnel et le compte à rebours."""
+    """Lance un nouveau giveaway, avec toute la logique de jobs."""
     if update.effective_user.id not in ADMIN_USER_IDS:
         await update.message.reply_text("Désolé, seul un administrateur peut lancer un giveaway.")
         return
     chat_id = update.message.chat_id
     if chat_id in active_giveaways:
-        await update.message.reply_text("Un giveaway est déjà en cours dans ce chat ! Attendez la fin du précédent.")
+        await update.message.reply_text("Un giveaway est déjà en cours dans ce chat !")
         return
     args = context.args
+    # ... (la logique de parsing des arguments est inchangée) ...
     if len(args) < 3:
-        await update.message.reply_text(
-            "Format incorrect.\nUsage : `/giveaway <gagnants> <durée> [@rôle] <prix>`\nExemple : `/giveaway 2 1h Super Lot`\nExemple avec rôle : `/giveaway 1 30m @vip Lot Exclusif`"
-        )
+        await update.message.reply_text("Format incorrect.\nUsage : `/giveaway <gagnants> <durée> [@rôle] <prix>`...")
         return
     try:
         winners_count = int(args[0])
         duration = parse_duration(args[1])
-        required_role = None
-        prize_args = []
-        role_found = False
-        for i, arg in enumerate(args[2:]):
+        required_role, prize_args, role_found = None, [], False
+        for arg in args[2:]:
             if arg.startswith('@') and not role_found:
                 potential_role = arg[1:].lower()
                 roles = load_roles()
                 if potential_role in roles:
-                    required_role = potential_role
-                    role_found = True
-                else:
-                    prize_args.append(arg)
-            else:
-                prize_args.append(arg)
+                    required_role, role_found = potential_role, True
+                else: prize_args.append(arg)
+            else: prize_args.append(arg)
         prize = ' '.join(prize_args)
-        if not prize or not duration or winners_count <= 0:
-            raise ValueError("Arguments invalides")
+        if not prize or not duration or winners_count <= 0: raise ValueError("Arguments invalides")
     except (ValueError, IndexError):
-        await update.message.reply_text("Format invalide. Vérifiez les nombres et la durée (ex: 10m, 2h, 1d).")
+        await update.message.reply_text("Format invalide...")
         return
         
     end_time = datetime.datetime.now(datetime.timezone.utc) + duration
     host_user = update.effective_user
     escaped_prize = escape_markdown_v2(prize)
     giveaway_data = {
-        "prize": escaped_prize,
-        "required_role": required_role,
-        "end_time": end_time,
-        "host_mention": host_user.mention_markdown_v2(),
-        "winners_count": winners_count,
-        "participants": {},
-        "message_id": None,
-        "chat_id": chat_id
+        "prize": escaped_prize, "required_role": required_role, "end_time": end_time,
+        "host_mention": host_user.mention_markdown_v2(), "winners_count": winners_count,
+        "participants": {}, "message_id": None, "chat_id": chat_id
     }
     active_giveaways[chat_id] = giveaway_data
     
@@ -327,21 +299,30 @@ async def giveaway_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         sent_message = await update.message.reply_text(message_text, reply_markup=reply_markup, parse_mode=constants.ParseMode.MARKDOWN_V2)
         giveaway_data['message_id'] = sent_message.message_id
         
+        # --- NOUVELLE LOGIQUE DE PLANIFICATION ---
         context.job_queue.run_once(draw_winners_callback, when=end_time, data={"chat_id": chat_id}, name=f"gw_draw_{chat_id}")
-        context.job_queue.run_repeating(update_countdown_job, interval=60, first=60, data={"chat_id": chat_id}, name=f"gw_update_{chat_id}")
+        
+        # Si le giveaway dure plus de 65 secondes, on met en place le système à double vitesse
+        if duration.total_seconds() > 65:
+            # Job lent (toutes les 60s)
+            context.job_queue.run_repeating(update_countdown_job, interval=60, first=60, data={"chat_id": chat_id}, name=f"gw_update_slow_{chat_id}")
+            # Job de transition 60s avant la fin
+            transition_time = end_time - datetime.timedelta(seconds=60)
+            context.job_queue.run_once(final_minute_trigger_job, when=transition_time, data={"chat_id": chat_id}, name=f"gw_final_minute_{chat_id}")
+        else:
+            # Si le giveaway est court, on met directement le décompte rapide
+            context.job_queue.run_repeating(update_countdown_job, interval=3, data={"chat_id": chat_id}, name=f"gw_update_fast_{chat_id}")
 
-        await update.message.reply_text(f"Giveaway pour '{prize}' lancé ! Le tirage aura lieu dans {args[1]}.", reply_to_message_id=sent_message.message_id)
+        await update.message.reply_text(f"Giveaway pour '{prize}' lancé ! Tirage dans {args[1]}.", reply_to_message_id=sent_message.message_id)
     except Exception as e:
         print(f"ERREUR CRITIQUE LORS DE L'ENVOI DU MESSAGE DE GIVEAWAY : {e}")
-        await update.message.reply_text("Une erreur est survenue lors de la création de l'annonce du giveaway.")
-        if chat_id in active_giveaways:
-            del active_giveaways[chat_id]
+        await update.message.reply_text("Une erreur est survenue lors de la création de l'annonce.")
+        if chat_id in active_giveaways: del active_giveaways[chat_id]
 
 async def participate_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Gère le clic sur le bouton de participation et vérifie le rôle (avec passe-droit admin)."""
+    # ... (inchangée) ...
     query = update.callback_query
-    user = query.from_user
-    chat_id = query.message.chat_id
+    user, chat_id = query.from_user, query.message.chat_id
     if chat_id not in active_giveaways:
         await query.answer("Désolé, ce giveaway est déjà terminé.", show_alert=True)
         return
@@ -357,22 +338,19 @@ async def participate_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
     else:
         giveaway['participants'][user.id] = user.full_name
         await query.answer("Participation enregistrée. Bonne chance !", show_alert=True)
-        
         new_text = format_giveaway_message(chat_id)
         keyboard = [[InlineKeyboardButton("🎉 Participer", callback_data='participate_giveaway')]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         try:
             await query.edit_message_text(text=new_text, reply_markup=reply_markup, parse_mode=constants.ParseMode.MARKDOWN_V2)
         except Exception as e:
-            if "Message is not modified" in str(e):
-                pass
-            else:
-                print(f"Ne peut pas éditer le message (pas de changement) : {e}")
+            if "Message is not modified" in str(e): pass
+            else: print(f"Ne peut pas éditer le message (pas de changement) : {e}")
 
 def main():
     """Lance le bot."""
     if not TOKEN:
-        print("Erreur: Le token n'a pas été trouvé. Assurez-vous de l'avoir configuré dans les variables d'environnement.")
+        print("Erreur: Le token n'a pas été trouvé.")
         return
 
     application = ApplicationBuilder().token(TOKEN).build()
@@ -385,7 +363,7 @@ def main():
     application.add_handler(CommandHandler("retirer_role", remove_role_command))
     application.add_handler(CallbackQueryHandler(participate_button, pattern='^participate_giveaway$'))
     
-    print("Le bot de giveaway (version V6 - Compte à rebours) est démarré...")
+    print("Le bot de giveaway (version V7 - Décompte final) est démarré...")
     application.run_polling()
 
 if __name__ == '__main__':
