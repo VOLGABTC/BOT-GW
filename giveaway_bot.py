@@ -237,7 +237,7 @@ async def cancel_giveaway_command(update: Update, context: ContextTypes.DEFAULT_
     
     giveaway = active_giveaways[chat_id]
     prize = giveaway['prize']
-    cancelled_text = f"❌ *GIVEAWAY ANNULÉ* ❌\n\nLe concours pour *{prize}* a été annulé par un administrateur."
+    cancelled_text = f"❌ *GIVEAWAY ANNULÉ* ❌\n\nLe concours pour *{prize}* a été annulé par un administrateur\\."
     try:
         await context.bot.edit_message_text(
             chat_id=chat_id, message_id=giveaway['message_id'], text=cancelled_text,
