@@ -1,4 +1,4 @@
-# --- VERSION FINALE V10 - IMAGE DE PREVENTION ---
+# --- VERSION FINALE V10 - IMAGE DE PREVENTION CORRIGEE ---
 import os
 import json
 import random
@@ -14,6 +14,8 @@ ADMIN_USER_IDS = [6938893387]
 
 TOKEN = os.environ.get('TOKEN')
 active_giveaways = {}
+
+# --- Fichiers de stockage ---
 ROLES_FILE = "roles.json"
 HISTORY_FILE = "giveaway_history.json"
 
@@ -227,11 +229,9 @@ async def giveaway_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         sent_message = await context.bot.send_message(chat_id, message_text, reply_markup=reply_markup, parse_mode=constants.ParseMode.MARKDOWN_V2, message_thread_id=message_thread_id)
         giveaway_data['message_id'] = sent_message.message_id
         
-        # --- MODIFICATION : Envoi de la photo de prévention ---
-        image_url = "https://i.imgur.com/6Nq3A6j.jpg"
+        image_url = "https://i.imgur.com/6Nq3A6j.jpg" # Lien direct vers l'image
         caption_text = f"Giveaway pour '{prize}' lancé ! Tirage dans {args[1]}."
         await context.bot.send_photo(chat_id=chat_id, photo=image_url, caption=caption_text, message_thread_id=message_thread_id)
-        # ---------------------------------------------------
 
         job_data = {"giveaway_key": giveaway_key}
         context.job_queue.run_once(draw_winners_callback, when=end_time, data=job_data, name=f"gw_draw_{giveaway_key}")
@@ -286,7 +286,7 @@ def main():
     application.add_handler(CommandHandler("assigner_role", assign_role_command))
     application.add_handler(CommandHandler("retirer_role", remove_role_command))
     application.add_handler(CallbackQueryHandler(participate_button, pattern=r'^participate_'))
-    print("Le bot de giveaway (version V10 - Image de prévention) est démarré...")
+    print("Le bot de giveaway (version V10 - Image Prévention) est démarré...")
     application.run_polling()
 
 if __name__ == '__main__':
