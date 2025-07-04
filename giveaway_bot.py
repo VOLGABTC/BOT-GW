@@ -1,10 +1,10 @@
-# --- VERSION FINALE V11 - FINITION COMPTE A REBOURS ---
+# --- VERSION FINALE V12 - VÉRIFIÉE ---
 import os
 import json
 import random
 import datetime
 import re
-import asyncio # NOUVEL IMPORT
+import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, constants
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 import telegram.error
@@ -22,10 +22,12 @@ HISTORY_FILE = "giveaway_history.json"
 
 # --- Fonctions Utilitaires ---
 def escape_markdown_v2(text: str) -> str:
+    """Échappe les caractères spéciaux pour le format MarkdownV2 de Telegram."""
     escape_chars = r'_*[]()~`>#+-=|{}.!'
     return re.sub(f'([{re.escape(escape_chars)}])', r'\\\1', text)
 
 def parse_duration(duration_str: str) -> datetime.timedelta | None:
+    """Analyse une chaîne de durée (ex: '10h', '30m', '2d') et retourne un timedelta."""
     match = re.match(r"(\d+)([hmd])", duration_str.lower())
     if not match: return None
     value, unit = int(match.group(1)), match.group(2)
@@ -35,6 +37,7 @@ def parse_duration(duration_str: str) -> datetime.timedelta | None:
     return None
 
 def format_giveaway_message(giveaway_key: str) -> str:
+    """Met en forme le message du giveaway pour l'affichage."""
     giveaway = active_giveaways.get(giveaway_key)
     if not giveaway: return "Aucun giveaway en cours."
     prize, end_time, host = giveaway['prize'], giveaway['end_time'], giveaway['host_mention']
@@ -57,6 +60,7 @@ def format_giveaway_message(giveaway_key: str) -> str:
 
 # --- Fonctions de Gestion des Rôles & Historique ---
 def load_roles():
+    """Charge les données des rôles depuis le fichier JSON."""
     try:
         with open(ROLES_FILE, 'r') as f:
             content = f.read()
@@ -65,9 +69,11 @@ def load_roles():
     except (FileNotFoundError, json.JSONDecodeError): return {}
 
 def save_roles(roles_data):
+    """Sauvegarde les données des rôles dans le fichier JSON."""
     with open(ROLES_FILE, 'w') as f: json.dump(roles_data, f, indent=4)
 
 def load_history():
+    """Charge l'historique des giveaways depuis le fichier JSON."""
     try:
         with open(HISTORY_FILE, 'r') as f:
             content = f.read()
@@ -76,6 +82,7 @@ def load_history():
     except (FileNotFoundError, json.JSONDecodeError): return {}
 
 def save_history(history_data):
+    """Sauvegarde l'historique des giveaways dans le fichier JSON."""
     with open(HISTORY_FILE, 'w') as f: json.dump(history_data, f, indent=4)
 
 # --- Tâches planifiées (Jobs) ---
@@ -113,21 +120,16 @@ async def draw_winners_callback(context: ContextTypes.DEFAULT_TYPE):
     giveaway = active_giveaways[giveaway_key]
     chat_id, message_thread_id = giveaway['chat_id'], giveaway['message_thread_id']
 
-    # --- NOUVELLE PARTIE : MISE À JOUR FINALE DU MESSAGE ---
     try:
         await context.bot.edit_message_text(
-            chat_id=chat_id,
-            message_id=giveaway['message_id'],
+            chat_id=chat_id, message_id=giveaway['message_id'],
             text=f"🎉 *{giveaway['prize']}* 🎉\n\n⌛️ *Tirage en cours\\.\\.\\.*",
-            parse_mode=constants.ParseMode.MARKDOWN_V2,
-            reply_markup=None # On retire le bouton "Participer"
+            parse_mode=constants.ParseMode.MARKDOWN_V2, reply_markup=None
         )
-        await asyncio.sleep(2) # Petite pause pour le suspense
+        await asyncio.sleep(2)
     except Exception as e:
         print(f"Erreur lors de la mise à jour finale du message : {e}")
-    # --- FIN DE LA NOUVELLE PARTIE ---
 
-    # Logique de tirage
     participants, prize = giveaway['participants'], giveaway['prize']
     final_message, winner_ids = f"🎉 Le giveaway pour *{prize}* est terminé \\! 🎉\n\n", []
     required_role, valid_participants = giveaway.get("required_role"), {}
@@ -150,7 +152,6 @@ async def draw_winners_callback(context: ContextTypes.DEFAULT_TYPE):
     
     winner_announcement_message = await context.bot.send_message(chat_id, final_message, parse_mode=constants.ParseMode.MARKDOWN_V2, message_thread_id=message_thread_id)
 
-    # Sauvegarde dans l'historique
     history = load_history()
     history_entry = { "prize": giveaway['prize'], "participants": giveaway['participants'], "winner_ids": winner_ids, "chat_id": chat_id, "message_thread_id": message_thread_id }
     history[str(winner_announcement_message.message_id)] = history_entry
@@ -159,7 +160,7 @@ async def draw_winners_callback(context: ContextTypes.DEFAULT_TYPE):
     if giveaway_key in active_giveaways:
         del active_giveaways[giveaway_key]
 
-# --- Commandes du Bot (inchangées) ---
+# --- Commandes du Bot ---
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = "💡 *Voici la liste des commandes disponibles* 💡\n\n\\-\\-\\-\n\n*Commandes pour les Administrateurs*\n\n`/giveaway <gagnants> <durée> [@rôle] <prix>`\n_Lance un nouveau giveaway\\. Le rôle est optionnel\\._\n*Exemple:* `/giveaway 2 1h Super Lot`\n*Exemple avec rôle:* `/giveaway 1 30m @vip Lot VIP`\n\n`/annuler_giveaway`\n_Annule le concours en cours dans le chat et le sujet actuels\\._\n\n`/reroll`\n_\\(En réponse à un message de gagnants\\) Retire un nouveau gagnant\\._\n\n`/assigner_role <rôle>`\n_\\(En réponse à un message\\) Assigne un rôle à un utilisateur\\._\n\n`/retirer_role <rôle>`\n_\\(En réponse à un message\\) Retire un rôle à un utilisateur\\._\n\n`/help`\n_Affiche ce message d'aide\\._"
     await update.message.reply_text(text=help_text, parse_mode=constants.ParseMode.MARKDOWN_V2)
@@ -183,55 +184,17 @@ async def reroll_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(reroll_message, parse_mode=constants.ParseMode.MARKDOWN_V2)
 
 async def assign_role_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Assigne un rôle à un utilisateur via une réponse ou un ID direct."""
-    if update.effective_user.id not in ADMIN_USER_IDS:
-        return await update.message.reply_text("Désolé, seul un administrateur peut assigner un rôle.")
-
-    try:
-        role_name = context.args[0].lower()
-    except IndexError:
-        return await update.message.reply_text("Format incorrect. Vous devez spécifier un nom de rôle.")
-
-    target_user_id = None
-    target_user_name = None
-
-    # --- NOUVELLE LOGIQUE DE DÉTECTION ---
-
-    # Méthode 1 : On vérifie si c'est une réponse
-    if update.message.reply_to_message:
-        target_user_id = update.message.reply_to_message.from_user.id
-        target_user_name = update.message.reply_to_message.from_user.full_name
-    
-    # Méthode 2 : Sinon, on vérifie si un ID a été fourni
-    elif len(context.args) >= 2:
-        try:
-            target_user_id = int(context.args[1])
-            # On n'a pas le nom de l'utilisateur facilement, on utilise son ID pour la confirmation
-            target_user_name = f"l'utilisateur avec l'ID {target_user_id}"
-        except ValueError:
-            return await update.message.reply_text("L'ID fourni n'est pas un numéro valide.")
-    
-    # Si aucune méthode n'a permis de trouver une cible
-    else:
-        return await update.message.reply_text(
-            "Usage incorrect.\n"
-            "Méthode 1 : Répondez au message d'un utilisateur avec `/assigner_role <rôle>`\n"
-            "Méthode 2 : Tapez `/assigner_role <rôle> <id_utilisateur>`"
-        )
-
-    # --- FIN DE LA NOUVELLE LOGIQUE ---
-
-    # Le reste de la fonction pour sauvegarder le rôle est le même
+    if update.effective_user.id not in ADMIN_USER_IDS: return await update.message.reply_text("Désolé, seul un administrateur peut assigner un rôle.")
+    if not update.message.reply_to_message: return await update.message.reply_text("Usage : Répondez au message d'un utilisateur avec `/assigner_role <nom_du_role>`")
+    try: role_name, target_user_id, target_user_name = context.args[0].lower(), update.message.reply_to_message.from_user.id, update.message.reply_to_message.from_user.full_name
+    except IndexError: return await update.message.reply_text("Format incorrect. N'oubliez pas le nom du rôle.")
     roles = load_roles()
-    if role_name not in roles:
-        roles[role_name] = []
-        
+    if role_name not in roles: roles[role_name] = []
     if target_user_id not in roles[role_name]:
         roles[role_name].append(target_user_id)
         save_roles(roles)
         await update.message.reply_text(f"Le rôle '{role_name}' a bien été assigné à {target_user_name}.")
-    else:
-        await update.message.reply_text(f"{target_user_name} a déjà le rôle '{role_name}'.")
+    else: await update.message.reply_text(f"{target_user_name} a déjà le rôle '{role_name}'.")
 
 async def remove_role_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id not in ADMIN_USER_IDS: return await update.message.reply_text("Désolé, seul un administrateur peut retirer un rôle.")
@@ -263,7 +226,7 @@ async def cancel_giveaway_command(update: Update, context: ContextTypes.DEFAULT_
     await update.message.reply_text("Le giveaway a bien été annulé.")
 
 async def giveaway_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Lance un nouveau giveaway, avec la logique de parsing de rôle DÉFINITIVE ET ROBUSTE."""
+    """Lance un nouveau giveaway, avec la logique de parsing de rôle DÉFINITIVE."""
     if update.effective_user.id not in ADMIN_USER_IDS:
         return await update.message.reply_text("Désolé, seul un administrateur peut lancer un giveaway.")
     
@@ -274,44 +237,36 @@ async def giveaway_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await update.message.reply_text("Un giveaway est déjà en cours dans ce sujet !")
         
     args = context.args
-    if len(args) < 2: # On a besoin au minimum de <gagnants> <durée> <prix>
+    if len(args) < 2:
         return await update.message.reply_text(
             "Format incorrect.\nUsage : `/giveaway <gagnants> <durée> [@rôle] <prix>`\nExemple : `/giveaway 2 1h Super Lot`"
         )
 
     try:
-        # --- LOGIQUE CORRIGÉE ET SIMPLIFIÉE ---
         winners_count = int(args[0])
         duration = parse_duration(args[1])
-        
         required_role = None
-        prize_start_index = 2  # Par défaut, le prix commence au 3ème argument
+        prize_start_index = 2
 
-        # On vérifie si le 3ème argument ressemble à un rôle
         if len(args) > 2 and args[2].startswith('@'):
             potential_role = args[2][1:].lower()
             roles = load_roles()
             if potential_role in roles:
                 required_role = potential_role
-            # Si le rôle n'existe pas, on l'ignore mais on ne l'inclut pas dans le prix
-            prize_start_index = 3 # Dans tous les cas, si ça commence par @, le prix commence après
+                prize_start_index = 3
         
-        # On vérifie qu'il reste des mots pour le prix
         if len(args) <= prize_start_index:
-            raise ValueError("Le nom du prix est manquant après le rôle.")
+            raise ValueError("Le nom du prix est manquant.")
 
         prize = ' '.join(args[prize_start_index:])
-        # --- FIN DE LA LOGIQUE CORRIGÉE ---
 
         if not prize or not duration or winners_count <= 0:
             raise ValueError("Arguments invalides")
             
     except (ValueError, IndexError) as e:
-        # On peut afficher une erreur plus précise
         error_message = str(e) if str(e) else "Format invalide. Vérifiez les nombres et la durée (ex: 10m, 2h, 1d)."
         return await update.message.reply_text(error_message)
 
-    # Le reste de la fonction est inchangé...
     end_time = datetime.datetime.now(datetime.timezone.utc) + duration
     host_user = update.effective_user
     escaped_prize = escape_markdown_v2(prize)
@@ -335,21 +290,15 @@ async def giveaway_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         sent_message = await context.bot.send_message(
-            chat_id,
-            text=message_text,
-            reply_markup=reply_markup,
-            parse_mode=constants.ParseMode.MARKDOWN_V2,
-            message_thread_id=message_thread_id
+            chat_id, text=message_text, reply_markup=reply_markup,
+            parse_mode=constants.ParseMode.MARKDOWN_V2, message_thread_id=message_thread_id
         )
         giveaway_data['message_id'] = sent_message.message_id
         
-        image_url = "https://imgur.com/a/fGbNYQ2"
+        image_url = "https://i.imgur.com/6Nq3A6j.jpg"
         caption_text = f"Giveaway pour '{prize}' lancé ! Tirage dans {args[1]}."
         await context.bot.send_photo(
-            chat_id=chat_id,
-            photo=image_url,
-            caption=caption_text,
-            message_thread_id=message_thread_id
+            chat_id=chat_id, photo=image_url, caption=caption_text, message_thread_id=message_thread_id
         )
 
         job_data = {"giveaway_key": giveaway_key}
@@ -377,12 +326,12 @@ async def participate_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
     required_role = giveaway.get("required_role")
     if required_role and user.id not in ADMIN_USER_IDS:
         roles = load_roles()
-        if required_role not in roles or user.id not in roles[required_role]:
+        if required_role not in roles or str(user.id) not in roles[required_role]: # On compare des chaînes de caractères
             await query.answer(f"Désolé, ce giveaway est réservé aux membres ayant le rôle '{required_role}'.", show_alert=True)
             return
-    if user.id in giveaway['participants']: await query.answer("Vous participez déjà !", show_alert=True)
+    if str(user.id) in giveaway['participants']: await query.answer("Vous participez déjà !", show_alert=True)
     else:
-        giveaway['participants'][user.id] = user.full_name
+        giveaway['participants'][str(user.id)] = user.full_name
         await query.answer("Participation enregistrée. Bonne chance !", show_alert=True)
         new_text = format_giveaway_message(giveaway_key)
         keyboard = [[InlineKeyboardButton("🎉 Participer", callback_data=query.data)]]
@@ -406,7 +355,7 @@ def main():
     application.add_handler(CommandHandler("assigner_role", assign_role_command))
     application.add_handler(CommandHandler("retirer_role", remove_role_command))
     application.add_handler(CallbackQueryHandler(participate_button, pattern=r'^participate_'))
-    print("Le bot de giveaway (version V11 - Finition) est démarré...")
+    print("Le bot de giveaway (V12 - Vérifié) est démarré...")
     application.run_polling()
 
 if __name__ == '__main__':
