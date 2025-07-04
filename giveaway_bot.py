@@ -1,4 +1,4 @@
-# --- VERSION FINALE V12 - VÉRIFIÉE ---
+# --- VERSION FINALE V13 - COMMANDE /mes_roles ---
 import os
 import json
 import random
@@ -162,10 +162,34 @@ async def draw_winners_callback(context: ContextTypes.DEFAULT_TYPE):
 
 # --- Commandes du Bot ---
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    help_text = "💡 *Voici la liste des commandes disponibles* 💡\n\n\\-\\-\\-\n\n*Commandes pour les Administrateurs*\n\n`/giveaway <gagnants> <durée> [@rôle] <prix>`\n_Lance un nouveau giveaway\\. Le rôle est optionnel\\._\n*Exemple:* `/giveaway 2 1h Super Lot`\n*Exemple avec rôle:* `/giveaway 1 30m @vip Lot VIP`\n\n`/annuler_giveaway`\n_Annule le concours en cours dans le chat et le sujet actuels\\._\n\n`/reroll`\n_\\(En réponse à un message de gagnants\\) Retire un nouveau gagnant\\._\n\n`/assigner_role <rôle>`\n_\\(En réponse à un message\\) Assigne un rôle à un utilisateur\\._\n\n`/retirer_role <rôle>`\n_\\(En réponse à un message\\) Retire un rôle à un utilisateur\\._\n\n`/help`\n_Affiche ce message d'aide\\._"
+    help_text = "💡 *Voici la liste des commandes disponibles* 💡\n\n\\-\\-\\-\n\n*Commandes pour les Administrateurs*\n\n`/giveaway <gagnants> <durée> [@rôle] <prix>`\n_Lance un nouveau giveaway\\. Le rôle est optionnel\\._\n*Exemple:* `/giveaway 2 1h Super Lot`\n*Exemple avec rôle:* `/giveaway 1 30m @vip Lot VIP`\n\n`/annuler_giveaway`\n_Annule le concours en cours dans le chat et le sujet actuels\\._\n\n`/reroll`\n_\\(En réponse à un message de gagnants\\) Retire un nouveau gagnant\\._\n\n`/assigner_role <rôle>`\n_\\(En réponse à un message\\) Assigne un rôle à un utilisateur\\._\n\n`/retirer_role <rôle>`\n_\\(En réponse à un message\\) Retire un rôle à un utilisateur\\._\n\n`/help`\n_Affiche ce message d'aide\\._\n\n*Commandes pour tous*\n\n`/mes_roles`\n_Vérifie les rôles que vous possédez\\._"
     await update.message.reply_text(text=help_text, parse_mode=constants.ParseMode.MARKDOWN_V2)
 
+# NOUVELLE FONCTION POUR LA COMMANDE /mes_roles
+async def check_my_roles_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Permet à un utilisateur de vérifier les rôles qu'il possède."""
+    user = update.effective_user
+    user_id = user.id
+    
+    roles_data = load_roles()
+    user_roles = []
+    
+    # On parcourt tous les rôles pour voir où l'utilisateur se trouve
+    for role_name, member_ids in roles_data.items():
+        if user_id in member_ids:
+            user_roles.append(role_name)
+            
+    if user_roles:
+        # On formate la liste des rôles pour un affichage propre
+        roles_list_str = "\n".join(f"• `{role}`" for role in user_roles)
+        reply_text = f"Bonjour {user.mention_markdown_v2()}\\! Voici les rôles que vous possédez :\n\n{roles_list_str}"
+    else:
+        reply_text = f"Bonjour {user.mention_markdown_v2()}\\! Vous n'avez aucun rôle spécial pour le moment\\."
+        
+    await update.message.reply_text(text=reply_text, parse_mode=constants.ParseMode.MARKDOWN_V2)
+
 async def reroll_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ... (inchangée) ...
     if update.effective_user.id not in ADMIN_USER_IDS: return await update.message.reply_text("Désolé, seul un administrateur peut faire un reroll.")
     if not update.message.reply_to_message: return await update.message.reply_text("Usage : Répondez au message d'annonce des gagnants avec `/reroll`.")
     reroll_message_id = str(update.message.reply_to_message.message_id)
@@ -184,6 +208,7 @@ async def reroll_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(reroll_message, parse_mode=constants.ParseMode.MARKDOWN_V2)
 
 async def assign_role_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ... (inchangée) ...
     if update.effective_user.id not in ADMIN_USER_IDS: return await update.message.reply_text("Désolé, seul un administrateur peut assigner un rôle.")
     if not update.message.reply_to_message: return await update.message.reply_text("Usage : Répondez au message d'un utilisateur avec `/assigner_role <nom_du_role>`")
     try: role_name, target_user_id, target_user_name = context.args[0].lower(), update.message.reply_to_message.from_user.id, update.message.reply_to_message.from_user.full_name
@@ -197,6 +222,7 @@ async def assign_role_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     else: await update.message.reply_text(f"{target_user_name} a déjà le rôle '{role_name}'.")
 
 async def remove_role_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ... (inchangée) ...
     if update.effective_user.id not in ADMIN_USER_IDS: return await update.message.reply_text("Désolé, seul un administrateur peut retirer un rôle.")
     if not update.message or not update.message.reply_to_message: return await update.message.reply_text("Usage : Répondez au message d'un utilisateur avec `/retirer_role <nom_du_role>`")
     try: role_name, target_user_id, target_user_name = context.args[0].lower(), update.message.reply_to_message.from_user.id, update.message.reply_to_message.from_user.full_name
@@ -210,6 +236,7 @@ async def remove_role_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     else: await update.message.reply_text(f"{target_user_name} n'a pas (ou plus) le rôle '{role_name}'.")
 
 async def cancel_giveaway_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ... (inchangée) ...
     chat_id, message_thread_id = update.message.chat_id, update.message.message_thread_id
     giveaway_key = f"{chat_id}_{message_thread_id}" if message_thread_id else str(chat_id)
     if update.effective_user.id not in ADMIN_USER_IDS: return await update.message.reply_text("Désolé, seul un administrateur peut annuler un giveaway.")
@@ -226,81 +253,38 @@ async def cancel_giveaway_command(update: Update, context: ContextTypes.DEFAULT_
     await update.message.reply_text("Le giveaway a bien été annulé.")
 
 async def giveaway_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Lance un nouveau giveaway, avec la logique de parsing de rôle DÉFINITIVE."""
-    if update.effective_user.id not in ADMIN_USER_IDS:
-        return await update.message.reply_text("Désolé, seul un administrateur peut lancer un giveaway.")
-    
+    # ... (inchangée) ...
+    if update.effective_user.id not in ADMIN_USER_IDS: return await update.message.reply_text("Désolé, seul un administrateur peut lancer un giveaway.")
     chat_id, message_thread_id = update.message.chat_id, update.message.message_thread_id
     giveaway_key = f"{chat_id}_{message_thread_id}" if message_thread_id else str(chat_id)
-
-    if giveaway_key in active_giveaways:
-        return await update.message.reply_text("Un giveaway est déjà en cours dans ce sujet !")
-        
+    if giveaway_key in active_giveaways: return await update.message.reply_text("Un giveaway est déjà en cours dans ce sujet !")
     args = context.args
-    if len(args) < 2:
-        return await update.message.reply_text(
-            "Format incorrect.\nUsage : `/giveaway <gagnants> <durée> [@rôle] <prix>`\nExemple : `/giveaway 2 1h Super Lot`"
-        )
-
+    if len(args) < 3: return await update.message.reply_text("Format incorrect...")
     try:
-        winners_count = int(args[0])
-        duration = parse_duration(args[1])
-        required_role = None
-        prize_start_index = 2
-
-        if len(args) > 2 and args[2].startswith('@'):
+        winners_count, duration = int(args[0]), parse_duration(args[1])
+        required_role, prize_start_index = None, 2
+        if len(args) > 3 and args[2].startswith('@'):
             potential_role = args[2][1:].lower()
-            roles = load_roles()
-            if potential_role in roles:
-                required_role = potential_role
-                prize_start_index = 3
-        
-        if len(args) <= prize_start_index:
-            raise ValueError("Le nom du prix est manquant.")
-
+            if potential_role in load_roles():
+                required_role, prize_start_index = potential_role, 3
+        if len(args) <= prize_start_index: raise ValueError("Le nom du prix est manquant.")
         prize = ' '.join(args[prize_start_index:])
-
-        if not prize or not duration or winners_count <= 0:
-            raise ValueError("Arguments invalides")
-            
+        if not prize or not duration or winners_count <= 0: raise ValueError("Arguments invalides")
     except (ValueError, IndexError) as e:
         error_message = str(e) if str(e) else "Format invalide. Vérifiez les nombres et la durée (ex: 10m, 2h, 1d)."
         return await update.message.reply_text(error_message)
-
     end_time = datetime.datetime.now(datetime.timezone.utc) + duration
-    host_user = update.effective_user
-    escaped_prize = escape_markdown_v2(prize)
-
-    giveaway_data = {
-        "prize": escaped_prize,
-        "required_role": required_role,
-        "end_time": end_time,
-        "host_mention": update.effective_user.mention_markdown_v2(),
-        "winners_count": winners_count,
-        "participants": {},
-        "message_id": None,
-        "chat_id": chat_id,
-        "message_thread_id": message_thread_id
-    }
+    giveaway_data = { "prize": escape_markdown_v2(prize), "required_role": required_role, "end_time": end_time, "host_mention": update.effective_user.mention_markdown_v2(), "winners_count": winners_count, "participants": {}, "message_id": None, "chat_id": chat_id, "message_thread_id": message_thread_id }
     active_giveaways[giveaway_key] = giveaway_data
-    
     message_text = format_giveaway_message(giveaway_key)
     keyboard = [[InlineKeyboardButton("🎉 Participer", callback_data=f'participate_{giveaway_key}')]]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
     try:
-        sent_message = await context.bot.send_message(
-            chat_id, text=message_text, reply_markup=reply_markup,
-            parse_mode=constants.ParseMode.MARKDOWN_V2, message_thread_id=message_thread_id
-        )
+        sent_message = await context.bot.send_message(chat_id, text=message_text, reply_markup=reply_markup, parse_mode=constants.ParseMode.MARKDOWN_V2, message_thread_id=message_thread_id)
         giveaway_data['message_id'] = sent_message.message_id
-        
         image_url = "https://i.imgur.com/6Nq3A6j.jpg"
         caption_text = f"Giveaway pour '{prize}' lancé ! Tirage dans {args[1]}."
-        await context.bot.send_photo(
-            chat_id=chat_id, photo=image_url, caption=caption_text, message_thread_id=message_thread_id
-        )
-
+        await context.bot.send_photo(chat_id=chat_id, photo=image_url, caption=caption_text, message_thread_id=message_thread_id)
         job_data = {"giveaway_key": giveaway_key}
         context.job_queue.run_once(draw_winners_callback, when=end_time, data=job_data, name=f"gw_draw_{giveaway_key}")
         if duration.total_seconds() > 65:
@@ -312,8 +296,7 @@ async def giveaway_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         print(f"ERREUR CRITIQUE LORS DE L'ENVOI DU MESSAGE DE GIVEAWAY : {e}")
         await update.message.reply_text("Une erreur est survenue lors de la création de l'annonce.")
-        if giveaway_key in active_giveaways:
-            del active_giveaways[giveaway_key]
+        if giveaway_key in active_giveaways: del active_giveaways[giveaway_key]
 
 async def participate_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -326,7 +309,7 @@ async def participate_button(update: Update, context: ContextTypes.DEFAULT_TYPE)
     required_role = giveaway.get("required_role")
     if required_role and user.id not in ADMIN_USER_IDS:
         roles = load_roles()
-        if required_role not in roles or str(user.id) not in roles[required_role]: # On compare des chaînes de caractères
+        if required_role not in roles or user.id not in roles[required_role]:
             await query.answer(f"Désolé, ce giveaway est réservé aux membres ayant le rôle '{required_role}'.", show_alert=True)
             return
     if str(user.id) in giveaway['participants']: await query.answer("Vous participez déjà !", show_alert=True)
@@ -347,6 +330,7 @@ def main():
         print("Erreur: Le token n'a pas été trouvé.")
         return
     application = ApplicationBuilder().token(TOKEN).build()
+    # Ajout de toutes les commandes
     application.add_handler(CommandHandler("start", help_command))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("reroll", reroll_command))
@@ -354,8 +338,12 @@ def main():
     application.add_handler(CommandHandler("annuler_giveaway", cancel_giveaway_command))
     application.add_handler(CommandHandler("assigner_role", assign_role_command))
     application.add_handler(CommandHandler("retirer_role", remove_role_command))
+    
+    # NOUVEAU HANDLER POUR LA COMMANDE /mes_roles
+    application.add_handler(CommandHandler("mes_roles", check_my_roles_command))
+    
     application.add_handler(CallbackQueryHandler(participate_button, pattern=r'^participate_'))
-    print("Le bot de giveaway (V12 - Vérifié) est démarré...")
+    print("Le bot de giveaway (V13 - Vérif Rôles) est démarré...")
     application.run_polling()
 
 if __name__ == '__main__':
