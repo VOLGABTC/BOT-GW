@@ -298,6 +298,26 @@ async def giveaway_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Une erreur est survenue lors de la création de l'annonce.")
         if giveaway_key in active_giveaways: del active_giveaways[giveaway_key]
 
+async def see_roles_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """[ADMIN] Affiche le contenu du fichier roles.json pour débogage."""
+    if update.effective_user.id not in ADMIN_USER_IDS:
+        return # Commande invisible pour les non-admins
+
+    roles = load_roles()
+    if not roles:
+        await update.message.reply_text("Le fichier `roles.json` est vide ou n'existe pas.")
+    else:
+        # On formate le JSON pour un affichage propre
+        pretty_json = json.dumps(roles, indent=2, ensure_ascii=False)
+        reply_text = f"Contenu actuel de `roles.json`:\n\n`{pretty_json}`"
+
+        # On envoie le message en plusieurs parties si nécessaire
+        for i in range(0, len(reply_text), 4096):
+            await update.message.reply_text(
+                text=reply_text[i:i+4096],
+                parse_mode=constants.ParseMode.MARKDOWN
+            )
+
 async def participate_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Gère le clic sur le bouton de participation et vérifie le rôle (AVEC LOGS DE DÉBOGAGE)."""
     query = update.callback_query
