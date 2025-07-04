@@ -299,23 +299,68 @@ async def giveaway_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if giveaway_key in active_giveaways: del active_giveaways[giveaway_key]
 
 async def participate_button(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gère le clic sur le bouton de participation et vérifie le rôle (AVEC LOGS DE DÉBOGAGE)."""
     query = update.callback_query
-    giveaway_key = query.data.replace('participate_', '')
     user = query.from_user
+    chat_id = query.message.chat_id
+    
+    # On récupère la clé du giveaway à partir des données du bouton
+    giveaway_key = query.data.replace('participate_', '')
+
+    print(f"\n--- NOUVELLE TENTATIVE DE PARTICIPATION ---")
+    print(f"Utilisateur : {user.full_name} (ID: {user.id})")
+    print(f"Giveaway Clé : {giveaway_key}")
+
     if giveaway_key not in active_giveaways:
+        print("Diagnostic : Giveaway non trouvé dans active_giveaways. Il est probablement terminé.")
         await query.answer("Désolé, ce giveaway est déjà terminé.", show_alert=True)
         return
+
     giveaway = active_giveaways[giveaway_key]
     required_role = giveaway.get("required_role")
-    if required_role and user.id not in ADMIN_USER_IDS:
-        roles = load_roles()
-        if required_role not in roles or user.id not in roles[required_role]:
-            await query.answer(f"Désolé, ce giveaway est réservé aux membres ayant le rôle '{required_role}'.", show_alert=True)
-            return
-    if str(user.id) in giveaway['participants']: await query.answer("Vous participez déjà !", show_alert=True)
+    
+    print(f"Rôle requis pour ce giveaway : {required_role}")
+
+    # --- VÉRIFICATION DU RÔLE (AVEC LOGS) ---
+    if required_role:
+        print("Un rôle est requis. Début de la vérification...")
+        is_admin = user.id in ADMIN_USER_IDS
+        print(f"L'utilisateur est-il admin ? {is_admin}")
+
+        if is_admin:
+            print("L'utilisateur est admin, il a un passe-droit. Participation autorisée.")
+        else:
+            print("L'utilisateur n'est pas admin. Vérification du rôle nécessaire.")
+            roles = load_roles()
+            print(f"Rôles chargés depuis roles.json : {roles}")
+            
+            user_has_role = False
+            if required_role in roles and user.id in roles[required_role]:
+                user_has_role = True
+
+            print(f"L'utilisateur a-t-il le rôle '{required_role}' ? {user_has_role}")
+            
+            if not user_has_role:
+                print(">>> REFUSÉ : L'utilisateur n'a pas le rôle requis.")
+                await query.answer(f"Désolé, ce giveaway est réservé aux membres ayant le rôle '{required_role}'.", show_alert=True)
+                return
+            else:
+                print("L'utilisateur a le rôle requis. Participation autorisée.")
+
     else:
+        print("Aucun rôle n'est requis pour ce giveaway.")
+
+    # --- FIN DE LA VÉRIFICATION ---
+
+    if str(user.id) in giveaway['participants']:
+        print(">>> REFUSÉ : L'utilisateur participe déjà.")
+        await query.answer("Vous participez déjà !", show_alert=True)
+    else:
+        print(">>> ACCEPTÉ : Ajout de l'utilisateur aux participants.")
         giveaway['participants'][str(user.id)] = user.full_name
         await query.answer("Participation enregistrée. Bonne chance !", show_alert=True)
+        
+        # Le reste de la fonction pour mettre à jour le message ne change pas...
         new_text = format_giveaway_message(giveaway_key)
         keyboard = [[InlineKeyboardButton("🎉 Participer", callback_data=query.data)]]
         reply_markup = InlineKeyboardMarkup(keyboard)
