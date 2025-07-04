@@ -403,6 +403,8 @@ def main():
     application.add_handler(CommandHandler("annuler_giveaway", cancel_giveaway_command))
     application.add_handler(CommandHandler("assigner_role", assign_role_command))
     application.add_handler(CommandHandler("retirer_role", remove_role_command))
+    application.add_handler(CommandHandler("voir_roles", see_roles_command))
+
     
     # NOUVEAU HANDLER POUR LA COMMANDE /mes_roles
     application.add_handler(CommandHandler("mes_roles", check_my_roles_command))
